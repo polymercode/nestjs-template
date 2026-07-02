@@ -23,5 +23,6 @@
     "strictPropertyInitialization": false,
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true
-  }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "prisma/**/*.ts"]
 }
