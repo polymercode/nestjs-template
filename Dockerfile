@@ -31,15 +31,17 @@ WORKDIR /app
 
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends openssl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system app && useradd --system --gid app app
 
-COPY --from=prod-deps /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY package*.json prisma.config.ts ./
-COPY prisma ./prisma
+# --chown here (not a separate `RUN chown -R`) avoids doubling image size —
+# a recursive chown after the fact forces a full copy-up of every file in
+# the overlay filesystem, effectively duplicating node_modules.
+COPY --from=prod-deps --chown=app:app /app/node_modules ./node_modules
+COPY --from=build --chown=app:app /app/dist ./dist
+COPY --chown=app:app package*.json prisma.config.ts ./
+COPY --chown=app:app prisma ./prisma
 
-RUN groupadd --system app && useradd --system --gid app app \
-    && chown -R app:app /app
 USER app
 
 EXPOSE 3000
