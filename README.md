@@ -7,8 +7,9 @@ Modular NestJS backend template with:
 - **Role-based access control** — `@Roles(Role.ADMIN)` on any route
 - **Swagger/OpenAPI** docs at `/docs` (non-production only)
 - **Config with env validation** (Joi), global validation pipe, exception filter, request logging
-- **Jest** unit tests + full e2e suite (runs without a database)
-- **Docker** — multi-stage Dockerfile + docker-compose with Postgres
+- **Redis-backed cache service** — global `CACHE_MANAGER`, cache-aside example in `UsersService`
+- **Jest** unit tests + full e2e suite (runs without a database or Redis)
+- **Docker** — multi-stage Dockerfile + docker-compose with Postgres and Redis
 
 ## Project structure
 
@@ -27,6 +28,7 @@ src/
     decorators/          # @Public(), @Roles(), @CurrentUser()
     filters/             # consistent error responses
     interceptors/        # request logging
+  cache/                 # global CacheModule (Redis via @nestjs/cache-manager + Keyv)
   prisma/                # global PrismaModule/PrismaService (pg driver adapter)
   generated/             # Prisma client output (gitignored, regenerated on install)
   modules/
@@ -45,8 +47,8 @@ npm install
 # 2. Configure environment
 cp .env.example .env     # then edit secrets
 
-# 3. Start Postgres (or point DATABASE_URL at an existing instance)
-docker compose up -d db
+# 3. Start Postgres and Redis (or point DATABASE_URL/REDIS_URL at existing instances)
+docker compose up -d db redis
 
 # 4. Create the schema and seed the admin user
 npm run db:migrate       # creates/applies migrations
@@ -76,6 +78,24 @@ npm run start:dev
 Every route requires a valid access token by default (global guard); opt out with `@Public()`.
 Restrict routes with `@Roles(Role.ADMIN)`.
 
+## Caching
+
+`CacheModule` ([src/cache/cache.module.ts](src/cache/cache.module.ts)) wraps `@nestjs/cache-manager`
+with a Redis store (`@keyv/redis`) and is registered globally. Inject `CACHE_MANAGER` to use it:
+
+```ts
+constructor(@Inject(CACHE_MANAGER) private readonly cache: Cache) {}
+```
+
+`UsersService.findByIdOrFail` demonstrates the cache-aside pattern — read-through on lookup,
+explicit `cache.del()` on any write (`update`, `setRefreshToken`). Default TTL is set by
+`CACHE_TTL_SECONDS` (60s). In tests, override the whole module rather than just the
+`CACHE_MANAGER` token, since the Redis client is constructed inside the module's factory:
+
+```ts
+.overrideModule(CacheModule).useModule(TestCacheModule)
+```
+
 ## Scripts
 
 | Script                 | Purpose                                   |
@@ -96,8 +116,8 @@ Restrict routes with `@Roles(Role.ADMIN)`.
 docker compose up --build
 ```
 
-Builds the app image (multi-stage, non-root user), starts Postgres, waits for it to be
-healthy, applies migrations on boot, and serves on port 3000.
+Builds the app image (multi-stage, non-root user), starts Postgres and Redis, waits for
+both to be healthy, applies migrations on boot, and serves on port 3000.
 
 ## Adding a new module
 

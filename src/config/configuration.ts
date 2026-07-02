@@ -10,4 +10,8 @@ export default () => ({
     refreshSecret: process.env.JWT_REFRESH_SECRET,
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? '7d',
   },
+  cache: {
+    redisUrl: process.env.REDIS_URL,
+    ttlSeconds: parseInt(process.env.CACHE_TTL_SECONDS ?? '60', 10),
+  },
 });

@@ -1,3 +1,4 @@
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Role } from '../../generated/prisma/enums';
@@ -27,10 +28,20 @@ describe('UsersService', () => {
     },
   };
 
+  const cache = {
+    get: jest.fn(),
+    set: jest.fn(),
+    del: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     const module = await Test.createTestingModule({
-      providers: [UsersService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        UsersService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: CACHE_MANAGER, useValue: cache },
+      ],
     }).compile();
 
     service = module.get(UsersService);
@@ -52,13 +63,31 @@ describe('UsersService', () => {
     expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { email: user.email } });
   });
 
-  it('findByIdOrFail throws NotFoundException for a missing user', async () => {
-    prisma.user.findUnique.mockResolvedValue(null);
+  describe('findByIdOrFail', () => {
+    it('throws NotFoundException for a missing user', async () => {
+      cache.get.mockResolvedValue(undefined);
+      prisma.user.findUnique.mockResolvedValue(null);
 
-    await expect(service.findByIdOrFail('missing-id')).rejects.toThrow(NotFoundException);
+      await expect(service.findByIdOrFail('missing-id')).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns and caches a user on a cache miss', async () => {
+      cache.get.mockResolvedValue(undefined);
+      prisma.user.findUnique.mockResolvedValue(user);
+
+      await expect(service.findByIdOrFail(user.id)).resolves.toEqual(user);
+      expect(cache.set).toHaveBeenCalledWith(`user:${user.id}`, user);
+    });
+
+    it('returns the cached user without hitting the database', async () => {
+      cache.get.mockResolvedValue(user);
+
+      await expect(service.findByIdOrFail(user.id)).resolves.toEqual(user);
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
   });
 
-  it('stores a refresh token hash', async () => {
+  it('stores a refresh token hash and invalidates the cache', async () => {
     prisma.user.update.mockResolvedValue(user);
 
     await service.setRefreshToken(user.id, 'hash');
@@ -67,5 +96,14 @@ describe('UsersService', () => {
       where: { id: user.id },
       data: { refreshToken: 'hash' },
     });
+    expect(cache.del).toHaveBeenCalledWith(`user:${user.id}`);
+  });
+
+  it('updates a user and invalidates the cache', async () => {
+    prisma.user.update.mockResolvedValue(user);
+
+    await service.update(user.id, { name: 'New Name' });
+
+    expect(cache.del).toHaveBeenCalledWith(`user:${user.id}`);
   });
 });

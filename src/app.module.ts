@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { CacheModule } from './cache/cache.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import configuration from './config/configuration';
@@ -21,6 +22,7 @@ import { PrismaModule } from './prisma/prisma.module';
       validationOptions: { abortEarly: true },
     }),
     PrismaModule,
+    CacheModule,
     HealthModule,
     AuthModule,
     UsersModule,

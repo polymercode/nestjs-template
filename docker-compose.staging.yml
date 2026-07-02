@@ -1,13 +1,11 @@
 services:
   db:
     image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: nestjs_template
-    ports:
-      - '5432:5432'
+    restart: always
+    env_file:
+      - .env.staging
+    # No `ports:` — db is reachable only from other containers on the compose
+    # network (app connects via `db:5432`), never from the host/outside world.
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -16,23 +14,34 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:8-alpine
+    restart: always
+    # No `ports:` — same reasoning as db, internal-network only.
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   app:
     build: .
-    restart: unless-stopped
+    restart: always
+    env_file:
+      - .env.staging
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      NODE_ENV: production
-      PORT: 3000
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/nestjs_template?schema=public
-      JWT_ACCESS_SECRET: change-me-access-secret
-      JWT_ACCESS_EXPIRES_IN: 15m
-      JWT_REFRESH_SECRET: change-me-refresh-secret
-      JWT_REFRESH_EXPIRES_IN: 7d
-      CORS_ORIGIN: '*'
+      redis:
+        condition: service_healthy
     ports:
       - '3000:3000'
 
 volumes:
   pgdata:
+  redisdata:

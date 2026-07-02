@@ -1,8 +1,10 @@
-import { INestApplication } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Global, INestApplication, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
+import { CacheModule } from '../src/cache/cache.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 // Ensure required env vars exist even when no .env file is present (e.g. CI).
@@ -10,6 +12,36 @@ process.env.NODE_ENV ??= 'test';
 process.env.DATABASE_URL ??= 'postgresql://test:test@localhost:5432/test?schema=public';
 process.env.JWT_ACCESS_SECRET ??= 'e2e-access-secret-at-least-16-chars';
 process.env.JWT_REFRESH_SECRET ??= 'e2e-refresh-secret-at-least-16-chars';
+// Never dialed — the whole CacheModule is swapped out for TestCacheModule below.
+process.env.REDIS_URL ??= 'redis://localhost:6379';
+
+/** In-memory stand-in for the Redis-backed CACHE_MANAGER. */
+function createCacheMock() {
+  const store = new Map<string, unknown>();
+  return {
+    get: jest.fn((key: string) => Promise.resolve(store.get(key))),
+    set: jest.fn((key: string, value: unknown) => {
+      store.set(key, value);
+      return Promise.resolve();
+    }),
+    del: jest.fn((key: string) => {
+      store.delete(key);
+      return Promise.resolve();
+    }),
+  };
+}
+
+/**
+ * Replaces the real CacheModule entirely so its Redis-backed factory never
+ * runs — swapping just the CACHE_MANAGER provider isn't enough since the
+ * factory that constructs the Redis client executes during module init.
+ */
+@Global()
+@Module({
+  providers: [{ provide: CACHE_MANAGER, useValue: createCacheMock() }],
+  exports: [CACHE_MANAGER],
+})
+class TestCacheModule {}
 
 /**
  * In-memory PrismaService stand-in so e2e tests exercise the full HTTP
@@ -63,6 +95,8 @@ describe('Application (e2e)', () => {
     })
       .overrideProvider(PrismaService)
       .useValue(createPrismaMock())
+      .overrideModule(CacheModule)
+      .useModule(TestCacheModule)
       .compile();
 
     app = configureApp(moduleRef.createNestApplication());
