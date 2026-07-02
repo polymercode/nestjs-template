@@ -13,4 +13,8 @@ export const validationSchema = Joi.object({
   JWT_REFRESH_EXPIRES_IN: Joi.string().default('7d'),
   REDIS_URL: Joi.string().uri().required(),
   CACHE_TTL_SECONDS: Joi.number().positive().default(60),
+  THROTTLE_TTL_MS: Joi.number().positive().default(60000),
+  THROTTLE_LIMIT: Joi.number().positive().default(100),
+  THROTTLE_AUTH_TTL_MS: Joi.number().positive().default(60000),
+  THROTTLE_AUTH_LIMIT: Joi.number().positive().default(10),
 });

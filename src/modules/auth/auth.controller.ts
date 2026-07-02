@@ -1,5 +1,6 @@
 import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
@@ -12,6 +13,7 @@ import type { JwtPayloadWithRefreshToken } from './types/jwt-payload.type';
 
 @ApiTags('auth')
 @Controller('auth')
+@Throttle({ auth: {} })
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
