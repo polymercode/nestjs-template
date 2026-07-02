@@ -32,7 +32,7 @@ services:
     env_file:
       - .env.staging
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=staging
       - PORT=3000
     depends_on:
       db:
